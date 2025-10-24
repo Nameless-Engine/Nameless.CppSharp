@@ -2095,7 +2095,8 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
 
         public bool HasVirtualTables(Class @class)
         {
-            return @class.IsGenerated && @class.IsDynamic && GetUniqueVTableMethodEntries(@class).Count > 0;
+            var entries = GetUniqueVTableMethodEntries(@class);
+            return @class.IsGenerated && @class.IsDynamic && entries != null && entries.Count > 0;
         }
 
         #endregion
