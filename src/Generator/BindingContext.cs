@@ -33,6 +33,9 @@ namespace CppSharp.Generators
 
             TranslationUnitPasses = new PassBuilder<TranslationUnitPass>(this);
             GeneratorOutputPasses = new PassBuilder<GeneratorOutputPass>(this);
+
+            TypeMaps = new TypeMapDatabase(this);
+            DeclMaps = new DeclMapDatabase(this);
         }
 
         public void RunPasses()
