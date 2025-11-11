@@ -888,10 +888,8 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
             Class @class, bool isAbstract = false, Property property = null)
             where T : Declaration, ITypedDecl
         {
-            try
-            {
-                PushBlock(BlockKind.Method);
-                Write("set");
+            PushBlock(BlockKind.Method);
+            Write("set");
 
             if (decl is Function)
             {
@@ -927,15 +925,8 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
 
                 this.GenerateField(@class, field, GenerateFieldSetter, true);
             }
-                UnindentAndWriteCloseBrace();
-                PopBlock(NewLineKind.BeforeNextBlock);
-            }
-            catch (Exception ex) when (ex.Message.Contains("Cannot marshal"))
-            {
-                PopBlock();
-                var propName = property?.Name ?? decl.Name;
-                Diagnostics.Warning($"Skipping property setter for '{propName}': {ex.Message}");
-            }
+            UnindentAndWriteCloseBrace();
+            PopBlock(NewLineKind.BeforeNextBlock);
         }
 
         private bool GenerateVariableSetter(Variable var)
@@ -1672,34 +1663,21 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
 
         public List<VTableComponent> GetUniqueVTableMethodEntries(Class @class)
         {
-            try
-            {
-                if (@class == null)
-                    return new List<VTableComponent>();
-                    
-                if (@class.IsDependent && @class.Specializations != null && @class.Specializations.Count > 0)
-                    @class = @class.Specializations[0];
+            if (@class.IsDependent)
+                @class = @class.Specializations[0];
 
-                var uniqueEntries = new OrderedSet<VTableComponent>();
-                var vTableMethodEntries = VTables.GatherVTableMethodEntries(@class);
-                if (vTableMethodEntries == null)
-                    return new List<VTableComponent>();
-                    
-                foreach (var entry in vTableMethodEntries.Where(e => !e.IsIgnored() && !e.Method.IsOperator))
-                    uniqueEntries.Add(entry);
+            var uniqueEntries = new OrderedSet<VTableComponent>();
+            var vTableMethodEntries = VTables.GatherVTableMethodEntries(@class);
+            foreach (var entry in vTableMethodEntries.Where(e => !e.IsIgnored() && !e.Method.IsOperator))
+                uniqueEntries.Add(entry);
 
-                return uniqueEntries.ToList();
-            }
-            catch
-            {
-                return new List<VTableComponent>();
-            }
+            return uniqueEntries.ToList();
         }
 
         public void GenerateVTable(Class @class)
         {
             var containingClass = @class;
-            @class = @class.IsDependent && @class.Specializations != null && @class.Specializations.Count > 0 ? @class.Specializations[0] : @class;
+            @class = @class.IsDependent ? @class.Specializations[0] : @class;
 
             var wrappedEntries = GetUniqueVTableMethodEntries(@class);
             if (wrappedEntries.Count == 0)
@@ -1712,7 +1690,7 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
             NewLine();
 
             bool hasDynamicBase = @class.NeedsBase && @class.BaseClass.IsDynamic;
-            var originalTableClass = @class.IsDependent && @class.Specializations != null && @class.Specializations.Count > 0 ? @class.Specializations[0] : @class;
+            var originalTableClass = @class.IsDependent ? @class.Specializations[0] : @class;
 
             // vtable hooks don't work without a NativeToManaged map, because we can't look up the managed
             // instance from a native pointer without the map, so don't generate them here.
@@ -2117,11 +2095,7 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
 
         public bool HasVirtualTables(Class @class)
         {
-            if (@class == null)
-                return false;
-                
-            var entries = GetUniqueVTableMethodEntries(@class);
-            return @class.IsGenerated && @class.IsDynamic && entries != null && entries.Count > 0;
+            return @class.IsGenerated && @class.IsDynamic && GetUniqueVTableMethodEntries(@class).Count > 0;
         }
 
         #endregion
@@ -2323,7 +2297,7 @@ internal static bool {Helpers.TryGetNativeToManagedMappingIdentifier}(IntPtr nat
                 // The local var must be of the exact type in the object map because of TryRemove
                 if (Options.GenerateNativeToManagedFor(@class))
                     WriteLine("NativeToManagedMap.TryRemove({0}, out _);", Helpers.InstanceIdentifier);
-                var realClass = @class.IsTemplate && @class.Specializations != null && @class.Specializations.Count > 0 ? @class.Specializations[0] : @class;
+                var realClass = @class.IsTemplate ? @class.Specializations[0] : @class;
                 var classInternal = TypePrinter.PrintNative(realClass);
                 if (@class.IsDynamic && GetUniqueVTableMethodEntries(realClass).Count != 0)
                 {
@@ -2651,30 +2625,22 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
         public void GenerateFunction(Function function, string parentName)
         {
-            try
+            PushBlock(BlockKind.Function);
+            GenerateDeclarationCommon(function);
+
+            var functionName = GetFunctionIdentifier(function);
+            if (functionName == parentName)
+                functionName += '_';
+
+            using (WriteBlock($"public static {function.OriginalReturnType} {functionName}({FormatMethodParameters(function.Parameters)})"))
             {
-                PushBlock(BlockKind.Function);
-                GenerateDeclarationCommon(function);
-
-                var functionName = GetFunctionIdentifier(function);
-                if (functionName == parentName)
-                    functionName += '_';
-
-                using (WriteBlock($"public static {function.OriginalReturnType} {functionName}({FormatMethodParameters(function.Parameters)})"))
-                {
-                    if (function.SynthKind == FunctionSynthKind.DefaultValueOverload)
-                        GenerateOverloadCall(function);
-                    else
-                        GenerateInternalFunctionCall(function);
-                }
-
-                PopBlock(NewLineKind.BeforeNextBlock);
+                if (function.SynthKind == FunctionSynthKind.DefaultValueOverload)
+                    GenerateOverloadCall(function);
+                else
+                    GenerateInternalFunctionCall(function);
             }
-            catch (Exception ex) when (ex.Message.Contains("Cannot marshal"))
-            {
-                PopBlock();
-                Diagnostics.Warning($"Skipping function: {ex.Message}");
-            }
+
+            PopBlock(NewLineKind.BeforeNextBlock);
         }
 
         public override void GenerateMethodSpecifier(Method method,
@@ -2714,17 +2680,15 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
 
         public void GenerateMethod(Method method, Class @class)
         {
-            try
+            PushBlock(BlockKind.Method, method);
+            GenerateDeclarationCommon(method);
+
+            if (method.ExplicitInterfaceImpl == null)
             {
-                PushBlock(BlockKind.Method, method);
-                GenerateDeclarationCommon(method);
+                Write(Helpers.GetAccess(method.Access));
+            }
 
-                if (method.ExplicitInterfaceImpl == null)
-                {
-                    Write(Helpers.GetAccess(method.Access));
-                }
-
-                GenerateMethodSpecifier(method);
+            GenerateMethodSpecifier(method);
 
             if (method.SynthKind == FunctionSynthKind.DefaultValueOverload && method.IsConstructor && !method.IsPure)
             {
@@ -2795,14 +2759,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
                 }
             }
 
-                PopBlock(NewLineKind.BeforeNextBlock);
-            }
-            catch (Exception ex) when (ex.Message.Contains("Cannot marshal"))
-            {
-                PopBlock();
-                var methodType = method.IsConstructor ? "constructor" : method.IsDestructor ? "destructor" : "method";
-                Diagnostics.Warning($"Skipping {methodType} {method.QualifiedName}: {ex.Message}");
-            }
+            PopBlock(NewLineKind.BeforeNextBlock);
         }
 
         private bool GenerateMethodBody(Class @class, Method method,
@@ -3427,33 +3384,7 @@ internal static{(@new ? " new" : string.Empty)} {printedClass} __GetInstance({Ty
             paramMarshal.HasUsingBlock = ctx.HasCodeBlock;
 
             if (string.IsNullOrEmpty(marshal.Context.Return))
-            {
-                var paramTypeName = param.QualifiedType.Visit(TypePrinter);
-                var typeInfo = param.Type.Desugar();
-                var reason = "unknown";
-                
-                if (typeInfo.TryGetClass(out var paramClass))
-                {
-                    if (paramClass == null)
-                        reason = "class is null";
-                    else if (paramClass.IsIncomplete)
-                        reason = "incomplete class";
-                    else if (paramClass.Ignore)
-                        reason = "class ignored";
-                    else if (!paramClass.IsGenerated)
-                        reason = "class not generated";
-                    else if (paramClass.Layout == null)
-                        reason = "no layout info";
-                    else
-                        reason = $"complex C++ class '{paramClass.QualifiedName}'";
-                }
-                else if (typeInfo is TemplateSpecializationType)
-                    reason = "template specialization";
-                else if (typeInfo is DependentNameType)
-                    reason = "dependent type";
-                
-                throw new Exception($"Cannot marshal parameter '{param.Name}' of type '{paramTypeName}' in function '{function.QualifiedName}'. Reason: {reason}");
-            }
+                throw new Exception("Cannot marshal argument of function");
 
             if (!string.IsNullOrWhiteSpace(marshal.Context.Before))
                 Write(marshal.Context.Before);

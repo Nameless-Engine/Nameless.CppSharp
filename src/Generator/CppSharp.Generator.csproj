@@ -2,7 +2,6 @@
   <PropertyGroup>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <IsPackable>true</IsPackable>
-	<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
   
   <ItemGroup>
@@ -10,10 +9,7 @@
   </ItemGroup>
   
   <ItemGroup>
+    <ProjectReference Include="..\Parser\CppSharp.Parser.csproj" />
     <ProjectReference Include="$(NativeProjectsDir)Std-symbols.vcxproj" ReferenceOutputAssembly="false" Condition="$(IsWindows)" />
-	
-	<ProjectReference Include="..\Parser\CppSharp.Parser.csproj" />
-    <ProjectReference Include="..\AST\CppSharp.AST.csproj" />
-    <ProjectReference Include="..\Core\CppSharp.csproj" />
   </ItemGroup>
 </Project>

@@ -23,10 +23,8 @@ namespace CppSharp.Extensions
             if (type is ArrayType array)
                 return (int)array.GetSizeInBits();
 
-            if (type.TryGetClass(out Class @class) && @class?.Layout != null)
-                return @class.Layout.Size * 8;
-                
-            return 0;
+            type.TryGetClass(out Class @class);
+            return @class.Layout.Size * 8;
         }
 
         public static int GetAlignment(this Type type, ParserTargetInfo targetInfo)
@@ -46,15 +44,11 @@ namespace CppSharp.Extensions
             if (type is ArrayType array)
                 return GetAlignment(array.Type.Desugar(), targetInfo);
 
-            if (type.TryGetClass(out Class @class) && @class?.Layout != null)
-            {
-                if (@class.MaxFieldAlignment != 0)
-                    return @class.MaxFieldAlignment * 8;
+            type.TryGetClass(out Class @class);
+            if (@class.MaxFieldAlignment != 0)
+                return @class.MaxFieldAlignment * 8;
 
-                return @class.Layout.Alignment * 8;
-            }
-            
-            return 0;
+            return @class.Layout.Alignment * 8;
         }
     }
 }
